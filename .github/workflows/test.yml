@@ -1,0 +1,71 @@
+name: Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # nacos 2.x server: 8848 = HTTP open API, 9848 = gRPC (SDK v2 client, = 8848 + 1000)
+    # v2.3.2 (not v2.2.3): v2.2.3 has an embedded Derby init bug (ExceptionInInitializerError
+    # in standaloneDatabaseOperateImpl, nacos issue #13037). SDK v2.2.7 is wire-compatible.
+    services:
+      nacos:
+        image: nacos/nacos-server:v2.3.2
+        ports:
+          - 8848:8848
+          - 9848:9848
+        env:
+          MODE: standalone
+        options: >-
+          --health-cmd "bash -c '</dev/tcp/localhost/8848' || exit 1"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # go.mod requires go >= 1.24
+        go-version: ['1.24.x']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Wait for nacos readiness
+        run: |
+          echo "Waiting for nacos open API..."
+          timeout 180 sh -c 'until curl -sf http://localhost:8848/nacos/v1/console/health/readiness >/dev/null 2>&1; do echo "waiting nacos..."; sleep 3; done'
+          echo "nacos ready"
+
+      - name: Unit tests (offline)
+        run: go test -race -timeout=5m ./...
+
+      - name: Integration tests (real nacos)
+        # nacos-sdk-go is pinned to a master commit (v2.3.6-0.x-4ba94455701e) that fixes the
+        # RpcClient data race; switch to a tagged release once nacos publishes > v2.3.5.
+        run: go test -race -timeout=10m -tags=integration ./...
