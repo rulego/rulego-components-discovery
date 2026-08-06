@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.6-0.20260713020125-4ba94455701e
-	github.com/rulego/rulego v0.37.1-0.20260806084530-f1e71cd989e3
+	github.com/rulego/rulego v0.37.1-0.20260806102237-d3aa2f14bec2
 	github.com/valyala/fasthttp v1.65.0
 )
 
