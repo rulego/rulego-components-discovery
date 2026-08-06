@@ -59,4 +59,13 @@ func (x *ConfigGetNode) OnMsg(ctx types.RuleContext, msg types.RuleMsg) {
 
 func (x *ConfigGetNode) Destroy() { _ = x.SharedNode.Close() }
 
+// ConnectionStatus reports the live Nacos connection health, overriding the
+// SharedNode default (which only reflects the wrapper lifecycle).
+func (x *ConfigGetNode) ConnectionStatus() types.StatusInfo {
+	if c, ok := x.SharedNode.Instance(); ok {
+		return clientConnStatus(c)
+	}
+	return x.SharedNode.ConnectionStatus()
+}
+
 func (x *ConfigGetNode) Desc() string { return "Read config content from nacos" }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
@@ -11,6 +12,16 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 )
+
+// Connection probe states (atomic connStatus).
+const (
+	connStateUnknown      int32 = 0
+	connStateConnected    int32 = 1
+	connStateReconnecting int32 = 2
+)
+
+// HealthProbeInterval is how often the background probe polls naming.ServerHealthy().
+var HealthProbeInterval = 10 * time.Second
 
 // Client wraps the nacos naming+config clients, providing instance selection and config read/write.
 type Client struct {
@@ -24,6 +35,17 @@ type Client struct {
 
 	listenMu  sync.Mutex
 	listeners map[string]func(namespace, group, dataId, data string)
+
+	// Live connection health, driven by a background probe calling
+	// naming.ServerHealthy(). The SDK owns its own gRPC reconnect loop; this
+	// surfaces the resulting connectivity so components can report it via
+	// ConnectionStatus() instead of only the SharedNode wrapper lifecycle.
+	connStatus int32
+	connMsgMu  sync.RWMutex
+	connMsg    string
+	probeStop  chan struct{}
+	probeDone  chan struct{}
+	probeOnce  sync.Once
 }
 
 type subKey struct {
@@ -52,13 +74,61 @@ func NewClient(cfg ConnConfig) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create config client: %w", err)
 	}
-	return &Client{
+	c := &Client{
 		naming:    naming,
 		config:    config,
 		instances: map[string][]model.Instance{},
 		counters:  map[string]*uint64{},
 		listeners: map[string]func(string, string, string, string){},
-	}, nil
+		probeStop: make(chan struct{}),
+		probeDone: make(chan struct{}),
+	}
+	// Seed status from the first probe, then poll periodically.
+	c.applyProbe(naming.ServerHealthy())
+	go c.probeLoop()
+	return c, nil
+}
+
+// probeLoop polls naming.ServerHealthy() and updates connStatus. The SDK keeps
+// its own gRPC reconnect loop; this only reflects the outcome so components can
+// report live health rather than just the SharedNode wrapper lifecycle.
+func (c *Client) probeLoop() {
+	defer close(c.probeDone)
+	t := time.NewTicker(HealthProbeInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-c.probeStop:
+			return
+		case <-t.C:
+			c.applyProbe(c.naming.ServerHealthy())
+		}
+	}
+}
+
+func (c *Client) applyProbe(healthy bool) {
+	if healthy {
+		atomic.StoreInt32(&c.connStatus, connStateConnected)
+		c.setConnMsg("")
+	} else {
+		atomic.StoreInt32(&c.connStatus, connStateReconnecting)
+		c.setConnMsg("nacos server unhealthy")
+	}
+}
+
+func (c *Client) setConnMsg(msg string) {
+	c.connMsgMu.Lock()
+	c.connMsg = msg
+	c.connMsgMu.Unlock()
+}
+
+// ConnState reports the live connection health as (connected, lastMessage).
+// Components map this to types.StatusInfo in their ConnectionStatus().
+func (c *Client) ConnState() (connected bool, msg string) {
+	c.connMsgMu.RLock()
+	msg = c.connMsg
+	c.connMsgMu.RUnlock()
+	return atomic.LoadInt32(&c.connStatus) == connStateConnected, msg
 }
 
 func keyOf(serviceName, group string) string {
@@ -214,6 +284,13 @@ func (c *Client) DeregisterInstance(serviceName, ip string, port uint64, group s
 
 // Close unsubscribes all services and closes the naming/config clients.
 func (c *Client) Close() error {
+	// Stop the health probe goroutine and wait for it to exit, so no probe
+	// runs against the naming client after CloseClient below.
+	if c.probeStop != nil {
+		c.probeOnce.Do(func() { close(c.probeStop) })
+		<-c.probeDone
+	}
+	atomic.StoreInt32(&c.connStatus, connStateUnknown)
 	c.mu.Lock()
 	subs := c.subs
 	c.subs = nil

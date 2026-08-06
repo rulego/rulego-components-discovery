@@ -69,7 +69,8 @@ func (x *ConfigEndpoint) Init(ruleConfig types.Config, configuration types.Confi
 	x.RuleConfig = ruleConfig
 	x.GracefulShutdown.InitGracefulShutdown(ruleConfig.Logger, 0)
 	x.dataIdRouterMap = map[string][]endpointApi.Router{}
-	_ = x.SharedNode.InitWithClose(ruleConfig, x.Type(), x.Config.ServerAddrs, true,
+	// Soft-fail init: nacos not ready at startup must not block; GetSafely retries with cooldown.
+	_ = x.SharedNode.InitWithCloseSoftFail(ruleConfig, x.Type(), x.Config.ServerAddrs, true,
 		func() (*discovery.Client, error) { return discovery.NewClient(x.Config.ConnConfig) },
 		func(c *discovery.Client) error { return c.Close() })
 	x.SharedNode.BindChain(configuration)
@@ -182,6 +183,15 @@ func (x *ConfigEndpoint) Close() error {
 	x.dataIdRouterMap = nil
 	x.mu.Unlock()
 	return nil
+}
+
+// ConnectionStatus reports the live Nacos connection health, overriding the
+// SharedNode default (which only reflects the wrapper lifecycle).
+func (x *ConfigEndpoint) ConnectionStatus() types.StatusInfo {
+	if c, ok := x.SharedNode.Instance(); ok {
+		return clientConnStatus(c)
+	}
+	return x.SharedNode.ConnectionStatus()
 }
 
 func (x *ConfigEndpoint) Printf(format string, v ...interface{}) {

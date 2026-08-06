@@ -110,6 +110,15 @@ func (x *ServiceCallNode) Destroy() {
 	_ = x.SharedNode.Close()
 }
 
+// ConnectionStatus reports the live Nacos connection health, overriding the
+// SharedNode default (which only reflects the wrapper lifecycle).
+func (x *ServiceCallNode) ConnectionStatus() types.StatusInfo {
+	if c, ok := x.SharedNode.Instance(); ok {
+		return clientConnStatus(c)
+	}
+	return x.SharedNode.ConnectionStatus()
+}
+
 func (x *ServiceCallNode) Desc() string {
 	return "Call cluster microservice via nacos service discovery"
 }
