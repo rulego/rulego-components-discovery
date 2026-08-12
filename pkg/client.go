@@ -9,8 +9,10 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
+	nacoslog "github.com/nacos-group/nacos-sdk-go/v2/common/logger"
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
+	"github.com/rulego/rulego/api/types"
 )
 
 // Connection probe states (atomic connStatus).
@@ -53,8 +55,28 @@ type subKey struct {
 	group       string
 }
 
+// Option configures a Client.
+type Option func(*newClientOptions)
+
+type newClientOptions struct {
+	logger types.Logger
+}
+
+// WithLogger routes nacos SDK logs into the given rulego logger. The SDK's
+// SetLogger is process-global; last non-nil logger wins.
+func WithLogger(log types.Logger) Option {
+	return func(o *newClientOptions) { o.logger = log }
+}
+
 // NewClient creates a nacos client from ConnConfig.
-func NewClient(cfg ConnConfig) (*Client, error) {
+func NewClient(cfg ConnConfig, opts ...Option) (*Client, error) {
+	o := &newClientOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	if o.logger != nil {
+		nacoslog.SetLogger(&nacosLogger{log: o.logger})
+	}
 	sc := cfg.toServerConfigs()
 	if len(sc) == 0 {
 		return nil, fmt.Errorf("server addrs is empty")

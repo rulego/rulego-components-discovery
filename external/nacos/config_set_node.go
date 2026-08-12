@@ -39,7 +39,9 @@ func (x *ConfigSetNode) Init(ruleConfig types.Config, configuration types.Config
 	}
 	x.contentTmpl, _ = el.NewTemplate(x.Config.Content)
 	if err := x.SharedNode.InitWithClose(ruleConfig, x.Type(), x.Config.ServerAddrs, ruleConfig.NodeClientInitNow,
-		func() (*discovery.Client, error) { return discovery.NewClient(x.Config.ConnConfig) },
+		func() (*discovery.Client, error) {
+			return discovery.NewClient(x.Config.ConnConfig, discovery.WithLogger(ruleConfig.Logger))
+		},
 		func(c *discovery.Client) error { return c.Close() }); err != nil {
 		return err
 	}

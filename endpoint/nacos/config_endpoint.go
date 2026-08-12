@@ -71,7 +71,9 @@ func (x *ConfigEndpoint) Init(ruleConfig types.Config, configuration types.Confi
 	x.dataIdRouterMap = map[string][]endpointApi.Router{}
 	// Soft-fail init: nacos not ready at startup must not block; GetSafely retries with cooldown.
 	_ = x.SharedNode.InitWithCloseSoftFail(ruleConfig, x.Type(), x.Config.ServerAddrs, true,
-		func() (*discovery.Client, error) { return discovery.NewClient(x.Config.ConnConfig) },
+		func() (*discovery.Client, error) {
+			return discovery.NewClient(x.Config.ConnConfig, discovery.WithLogger(ruleConfig.Logger))
+		},
 		func(c *discovery.Client) error { return c.Close() })
 	x.SharedNode.BindChain(configuration)
 	return nil

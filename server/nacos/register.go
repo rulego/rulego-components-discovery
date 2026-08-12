@@ -16,8 +16,8 @@ type RegisterConfig struct {
 }
 
 // Register registers an instance to nacos, returning the client and a deregister cleanup.
-func Register(cfg RegisterConfig) (*discovery.Client, func(), error) {
-	client, err := discovery.NewClient(cfg.ConnConfig)
+func Register(cfg RegisterConfig, opts ...discovery.Option) (*discovery.Client, func(), error) {
+	client, err := discovery.NewClient(cfg.ConnConfig, opts...)
 	if err != nil {
 		return nil, nil, err
 	}
