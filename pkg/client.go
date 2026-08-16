@@ -75,7 +75,7 @@ func NewClient(cfg ConnConfig, opts ...Option) (*Client, error) {
 		opt(o)
 	}
 	if o.logger != nil {
-		nacoslog.SetLogger(&nacosLogger{log: o.logger})
+		nacoslog.SetLogger(newNacosLogger(o.logger))
 	}
 	sc := cfg.toServerConfigs()
 	if len(sc) == 0 {
