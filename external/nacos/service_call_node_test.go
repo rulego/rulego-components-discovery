@@ -164,7 +164,7 @@ func TestServiceCallE2E(t *testing.T) {
 	resultCh := make(chan types.RuleMsg, 1)
 	errCh := make(chan error, 1)
 	msg := types.NewMsg(0, "e2e", types.JSON, types.NewMetadata(), "")
-	eng.OnMsg(msg, types.WithEndFunc(func(ctx types.RuleContext, m types.RuleMsg, err error) {
+	eng.OnMsg(msg, types.WithOnEnd(func(ctx types.RuleContext, m types.RuleMsg, err error, relationType string) {
 		if err != nil {
 			errCh <- err
 			return
@@ -265,7 +265,7 @@ func TestServiceCallChainE2E(t *testing.T) {
 	resultCh := make(chan types.RuleMsg, 1)
 	errCh := make(chan error, 1)
 	msg := types.NewMsg(0, "chain", types.JSON, types.NewMetadata(), "")
-	eng.OnMsg(msg, types.WithEndFunc(func(ctx types.RuleContext, m types.RuleMsg, err error) {
+	eng.OnMsg(msg, types.WithOnEnd(func(ctx types.RuleContext, m types.RuleMsg, err error, relationType string) {
 		if err != nil {
 			errCh <- err
 			return
@@ -321,7 +321,7 @@ func TestServiceCallHttpError(t *testing.T) {
 
 	endCh := make(chan error, 1)
 	msg := types.NewMsg(0, "err", types.JSON, types.NewMetadata(), "")
-	eng.OnMsg(msg, types.WithEndFunc(func(ctx types.RuleContext, m types.RuleMsg, err error) {
+	eng.OnMsg(msg, types.WithOnEnd(func(ctx types.RuleContext, m types.RuleMsg, err error, relationType string) {
 		endCh <- err
 	}))
 
@@ -370,7 +370,7 @@ func TestConfigGetE2E(t *testing.T) {
 	resultCh := make(chan types.RuleMsg, 1)
 	errCh := make(chan error, 1)
 	msg := types.NewMsg(0, "cfg", types.JSON, types.NewMetadata(), "")
-	eng.OnMsg(msg, types.WithEndFunc(func(ctx types.RuleContext, m types.RuleMsg, err error) {
+	eng.OnMsg(msg, types.WithOnEnd(func(ctx types.RuleContext, m types.RuleMsg, err error, relationType string) {
 		if err != nil {
 			errCh <- err
 			return
@@ -419,7 +419,7 @@ func TestConfigSetE2E(t *testing.T) {
 
 	endCh := make(chan error, 1)
 	msg := types.NewMsg(0, "set", types.JSON, types.NewMetadata(), "")
-	eng.OnMsg(msg, types.WithEndFunc(func(ctx types.RuleContext, m types.RuleMsg, err error) {
+	eng.OnMsg(msg, types.WithOnEnd(func(ctx types.RuleContext, m types.RuleMsg, err error, relationType string) {
 		endCh <- err
 	}))
 
@@ -462,7 +462,7 @@ func TestConfigSetTemplateE2E(t *testing.T) {
 
 	endCh := make(chan error, 1)
 	msg := types.NewMsg(0, "set", types.JSON, types.NewMetadata(), wantContent)
-	eng.OnMsg(msg, types.WithEndFunc(func(ctx types.RuleContext, m types.RuleMsg, err error) {
+	eng.OnMsg(msg, types.WithOnEnd(func(ctx types.RuleContext, m types.RuleMsg, err error, relationType string) {
 		endCh <- err
 	}))
 
